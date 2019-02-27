@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "student": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "birth": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "alternateEmail": {
+              "type": "string"
+            },
+            "address": {
+              "type": "string"
+            },
+            "telephone": {
+              "type": "integer"
+            },
+            "password": {
+              "type": "string"
+            },
+            "number": {
+              "type": "integer"
+            },
+            "firstYear": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "birth",
+            "email",
+            "alternateEmail",
+            "address",
+            "telephone",
+            "password",
+            "number",
+            "firstYear"
+          ]
+        }
+      },
+      "id": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "name",
+      "student",
+      "id"
+    ]
+  }
+}
