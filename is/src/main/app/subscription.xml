@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:cxf="http://www.mulesoft.org/schema/mule/cxf" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:smtp="http://www.mulesoft.org/schema/mule/smtp"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/cxf http://www.mulesoft.org/schema/mule/cxf/current/mule-cxf.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/smtp http://www.mulesoft.org/schema/mule/smtp/current/mule-smtp.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <db:mysql-config name="MySQL_Configuration3" url="jdbc:mysql://127.0.0.1:3306/?user=root&amp;password=admin" doc:name="MySQL Configuration"/>
+    <smtp:gmail-connector name="Gmail" validateConnections="true" doc:name="Gmail"/>
+    <db:mysql-config name="MySQL_Configuration4" host="localhost" port="3306" user="admin" password="admin" database="project2db" doc:name="MySQL Configuration"/>
+    <db:mysql-config name="MySQL_Configuration5" host="localhost" port="3306" user="admin" password="admin" database="project2db" doc:name="MySQL Configuration"/>
+
+    <sub-flow name="sendvalidationsubflow">
+        <set-payload value="Validate your subscription here: http://localhost:8081/validate_subscription/?email=#[flowVars.validation_email]&amp;course=#[flowVars.course]" doc:name="Set validation email content Payload"/>
+        <logger message="validation email message: #[message.payload]" level="DEBUG" doc:name="Logger"/>
+        <smtp:outbound-endpoint host="smtp.gmail.com" port="587" user="ananasfidalgo%40gmail.com" password="ej069yry"  to="#[flowVars.validation_email]" from="ananasfidalgo@gmail.com" subject="Please verify your email address" responseTimeout="10000" doc:name="Send validation email" connector-ref="Gmail"/>
+        <db:update config-ref="MySQL_Configuration5" doc:name="Update number fo sent emails in Database">
+            <db:parameterized-query><![CDATA[UPDATE statistics SET num_sent_emails = num_sent_emails + 1 where id = 0;]]></db:parameterized-query>
+        </db:update>
+        <db:update config-ref="MySQL_Configuration5" doc:name="Update numero emails dia">
+            <db:parameterized-query><![CDATA[UPDATE statistics SET num_sent_emails_dia = num_sent_emails_dia + 1 where id = 0;]]></db:parameterized-query>
+        </db:update>
+    </sub-flow>
+    <sub-flow name="subscription_subflow">
+        <logger message="subscription input: #[message.payload]" level="DEBUG" doc:name="Logger"/>
+        <db:insert config-ref="MySQL_Configuration5" doc:name="Insert Subscription into Database">
+            <db:parameterized-query><![CDATA[INSERT INTO subscriptions (email, course) VALUES (#[message.payload.email], #[message.payload.course]);]]></db:parameterized-query>
+        </db:insert>
+        <db:update config-ref="MySQL_Configuration5" doc:name="Update ncourses">
+            <db:parameterized-query><![CDATA[Update statistics
+SET ncourses = (Select Count(Distinct course)
+From subscriptions)
+Where(id=0);]]></db:parameterized-query>
+        </db:update>
+        <choice doc:name="Should send validation email">
+            <when expression="payload.equals(1)">
+                <flow-ref name="sendvalidationsubflow" doc:name="sendvalidationsubflow"/>
+                <set-payload value="Go to your email inbox." doc:name="Set Payload"/>
+            </when>
+            <otherwise>
+                <logger message="Failed." level="WARN" doc:name="Logger"/>
+                <set-payload value="Failed. Try again." doc:name="Set Payload"/>
+            </otherwise>
+        </choice>
+    </sub-flow>
+
+    <flow name="webflow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/add_subscription/" doc:name="HTTP"/>
+        <logger message="WEB" level="INFO" doc:name="Logger"/>
+        <set-payload value="#[message.inboundProperties.'http.query.params']" doc:name="Set HTTP Query Params Payload"/>
+        <set-variable variableName="validation_email" value="#[message.payload.email]" doc:name="Set Validation Email Variable"/>
+        <flow-ref name="subscription_subflow" doc:name="subscription_subflow"/>
+    </flow>
+    <flow name="soapflow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/soap_add_subscription" allowedMethods="GET,POST" doc:name="HTTP"/>
+        <logger message="SOAP" level="INFO" doc:name="Logger"/>
+        <cxf:jaxws-service serviceClass="ws.Subscription" doc:name="CXF"/>
+        <custom-transformer returnClass="java.util.HashMap" class="ws.HashSubscription" doc:name="Java"/>
+        <set-variable variableName="validation_email" value="#[message.payload['email']]" doc:name="Set Email Variable"/>
+        <set-variable variableName="course" value="#[message.payload['course']]" doc:name="Set Validation course Variable"/>
+        <flow-ref name="subscription_subflow" doc:name="subscription_subflow"/>
+    </flow>
+
+</mule>

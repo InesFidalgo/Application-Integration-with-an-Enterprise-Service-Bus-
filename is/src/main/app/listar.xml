@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:cxf="http://www.mulesoft.org/schema/mule/cxf" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:twitter="http://www.mulesoft.org/schema/mule/twitter"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/twitter http://www.mulesoft.org/schema/mule/twitter/current/mule-twitter.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/cxf http://www.mulesoft.org/schema/mule/cxf/current/mule-cxf.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <http:request-config name="HTTP_Listener_Configuration2" protocol="HTTP" port="8081" doc:name="HTTP Request Configuration" host="All Interfaces [0.0.0.0] (Default)"/>
+    <sub-flow name="listar_subflow">
+        <db:select config-ref="MySQL_Configuration5" doc:name="List Subscriptions">
+            <db:parameterized-query><![CDATA[SELECT email from subscriptions
+WHERE course = #[flowVars.course];]]></db:parameterized-query>
+        </db:select>
+        <set-variable variableName="result" value="#[new StringBuilder()]" doc:name="Set  Variable"/>
+        <foreach doc:name="For Each">
+            <expression-component doc:name="Expression"><![CDATA[result.append(payload.email+"\n")]]></expression-component>
+        </foreach>
+        <set-payload value="'#[flowVars.result.toString()]'" doc:name="Set Payload"/>
+    </sub-flow>
+    <flow name="listar">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/listar" allowedMethods="GET,POST" doc:name="HTTP"/>
+        <cxf:jaxws-service serviceClass="ws.Listar" doc:name="CXF"/>
+        <custom-transformer returnClass="java.util.HashMap" class="ws.HashSubscription" doc:name="Java"/>
+        <set-variable variableName="course" value="#[message.payload['email']]" doc:name="Set course Variable"/>
+        <flow-ref name="listar_subflow" doc:name="listar_subflow"/>
+    </flow>
+
+</mule>

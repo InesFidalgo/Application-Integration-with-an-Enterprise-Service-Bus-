@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <sub-flow name="validateSsubflow">
+        <db:update config-ref="MySQL_Configuration5" doc:name="Validate email subscription in Database">
+            <db:parameterized-query><![CDATA[UPDATE subscriptions SET valido = 1 WHERE (email = #[flowVars.email]
+AND course = #[flowVars.course]);]]></db:parameterized-query>
+        </db:update>
+        <logger message="validate email output: #[message.payload]" level="DEBUG" doc:name="Logger"/>
+    </sub-flow>
+
+    <flow name="webvalidateflow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/validate_subscription/" doc:name="HTTP"/>
+        <set-variable variableName="email" value="#[message.inboundProperties.'http.query.params'.email]" doc:name="Set email "/>
+        <set-variable variableName="course" value="#[message.inboundProperties.'http.query.params'.course]" doc:name="Set course "/>
+        <logger message="Validating email: #[flowVars.email]" level="INFO" doc:name="Logger"/>
+        <flow-ref name="validateSsubflow" doc:name="validateSsubflow"/>
+        <set-payload value="'#[message.payload]'" doc:name="Set Payload"/>
+    </flow>
+
+</mule>
