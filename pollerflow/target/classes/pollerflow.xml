@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:smtp="http://www.mulesoft.org/schema/mule/smtp" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:mulexml="http://www.mulesoft.org/schema/mule/xml" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:schedulers="http://www.mulesoft.org/schema/mule/schedulers" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/schedulers http://www.mulesoft.org/schema/mule/schedulers/current/mule-schedulers.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/xml http://www.mulesoft.org/schema/mule/xml/current/mule-xml.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/smtp http://www.mulesoft.org/schema/mule/smtp/current/mule-smtp.xsd">
+    <http:request-config name="RESTProject3" host="localhost" port="8080" basePath="HelloWorldApplication/rest/project3webservices" doc:name="HTTP Request Configuration"/>
+    <db:mysql-config name="MySQL_Configuration" host="localhost" port="3306" user="root" password="root" database="mysqldb" doc:name="MySQL Configuration"/>
+    <smtp:gmail-connector name="Gmail" validateConnections="true" doc:name="Gmail"/>
+    <flow name="getmaterialsflow">
+        <poll doc:name="Poll">
+            <schedulers:cron-scheduler expression="0 0 0 1/1 * ? *" timeZone="GMT"/>
+            <http:request config-ref="RESTProject3" path="getmaterials2" method="GET" metadata:id="715d0a7a-e6e3-4351-996d-b0d1e322556f" doc:name="getMaterials"/>
+        </poll>
+        <expression-transformer expression="#[message.payloadAs(java.lang.String)]" metadata:id="ecefe954-3f83-4a68-ac49-83f744e614aa" doc:name="buffer to string"/>
+        <set-session-variable variableName="new" value="#[payload]" doc:name="save xml as variable"/>
+        <file:outbound-endpoint path="files" outputPattern="new.xml" responseTimeout="10000" doc:name="save to file as new.xml"/>
+        <scripting:component doc:name="FIND CHANGES IN THE DATABASE">
+            <scripting:script engine="Groovy"><![CDATA[def input1 = new File("files\\new.xml")
+def input2 = new File("files\\old.xml")
+def n =0
+def parser = new XmlSlurper()
+def courses1
+if (!(input1.length() == 0))
+	courses1 = parser.parse(input1) 
+def parser1 = new XmlSlurper()
+def courses2
+if (!(input2.length() == 0))
+	courses2 = parser1.parse(input2) 
+def mapa = [:]
+if (!(input1.length() == 0)){
+	for (co in courses1.course){
+		for (mat in co.materiais.Material.name){
+			mapa.put(co.@'nome',mat.text())
+			n++
+		}
+	}
+}
+def mapa2 = [:]
+if (!(input2.length() == 0)){	
+	for (co in courses2.course){
+		for (mat in co.materiais.Material.name){
+			mapa2.put(co.@'nome',mat.text())
+		}
+	}
+}
+def mapa3 = mapa.intersect(mapa2)
+def added = mapa - mapa3
+def removed = mapa2 - mapa3
+
+def mapaf = [:]
+for (e in added){
+	mapaf.put(('a#'+e.key+'#'+n),e.value)
+	n++
+}
+for (e in removed){
+	mapaf.put(('r#'+e.key+'#'+n),e.value)
+	n++
+}
+mapaf
+
+]]></scripting:script>
+        </scripting:component>
+        <set-session-variable variableName="changes" value="#[payload]" doc:name="Session Variable"/>
+
+
+        <set-payload value="#[sessionVars.'new']" mimeType="text/xml" metadata:id="2aee8afe-1684-44b9-a8f8-f5d3f66f9686" doc:name="get new.xml"/>
+        <file:outbound-endpoint path="files" outputPattern="old.xml" responseTimeout="10000" doc:name="save as old.xml"/>
+        <flow-ref name="getCourses" doc:name="getCourses"/>
+    </flow>
+    <sub-flow name="getCourses">
+        <http:request config-ref="RESTProject3" path="getcourses" method="GET" metadata:id="91f57d7c-e5a9-43d9-b528-c7c7abfde217" doc:name="Copy_of_getStudents"/>
+        <expression-transformer expression="#[message.payloadAs(java.lang.String)]" metadata:id="ecefe954-3f83-4a68-ac49-83f744e614aa" doc:name="Copy_of_parse buffer"/>
+        <file:outbound-endpoint path="files" outputPattern="students.json" responseTimeout="10000" doc:name="Copy_of_save as students.json"/>
+        <db:select config-ref="MySQL_Configuration" doc:name="get subscriptors">
+            <db:parameterized-query><![CDATA[select * from subscriptions]]></db:parameterized-query>
+        </db:select>
+        <scripting:component doc:name="Copy_of_Find student in each course">
+            <scripting:script engine="Groovy"><![CDATA[def subs = payload
+def input = new File("files\\students.json")
+def obj = new groovy.json.JsonSlurper().parse(input)
+def mapa = [:]
+int i=0;
+for (cena in obj){
+	for (est in cena.student){
+		def nome = cena.name+'#'+i
+		mapa.put(nome,est.email)
+		i++;
+	}
+}
+for (e in subs){
+	mapa.put(e.get('course')+'#'+i,e.get('email'))
+	i++
+}
+mapa
+]]></scripting:script>
+        </scripting:component>
+        <set-session-variable variableName="courses" value="#[payload]" doc:name="Copy_of_Session Variable"/>
+
+        <flow-ref name="sendMails" doc:name="sendMails"/>
+    </sub-flow>
+    <sub-flow name="sendMails">
+
+        <scripting:component doc:name="make email content">
+            <scripting:script engine="Groovy"><![CDATA[def changes = sessionVars['changes']
+def courses = sessionVars['courses']
+def st = ''
+
+for (e in changes){
+	String[] split = e.key.split('#')
+	if (split[0].equals('a')){
+		st = st+'Adicionado '+e.value+' no curso '+split[1]+'\n'
+	}
+	if (split[0].equals('r')){
+		st = st+'Removido '+e.value+' do curso '+split[1]+'\n'
+	}
+}
+
+st]]></scripting:script>
+        </scripting:component>
+        <set-session-variable variableName="content" value="#[payload]" mimeType="text/plain" doc:name="Session Variable"/>
+
+        <scripting:component doc:name="make email list">
+            <scripting:script engine="Groovy"><![CDATA[def changes = sessionVars['changes']
+def courses = sessionVars['courses']
+def cl = new HashSet()
+def lista = new HashSet()
+
+for (e in changes){
+	String[] split = e.key.split('#')
+	cl.add(split[1])
+}
+
+for (e in courses){
+	String[] split = e.key.split('#')
+	
+	if (cl.contains(split[0])){
+		lista.add(e.value)
+	}
+}
+lista]]></scripting:script>
+        </scripting:component>
+        <set-session-variable variableName="mails" value="#[payload]" doc:name="Session Variable"/>
+
+        <flow-ref name="sendemail" doc:name="sendemail"/>
+    </sub-flow>
+    <sub-flow name="sendemail">
+        <foreach collection="#[sessionVars.mails]" doc:name="For Each">
+            <set-session-variable variableName="email" value="#[payload]" doc:name="get email and save it"/>
+            <set-payload value="#[sessionVars.content]" doc:name="Set email content"/>
+
+            <smtp:outbound-endpoint host="smtp.gmail.com" port="587" user="ananasfidalgo%40gmail.com" password="ej069yry" connector-ref="Gmail" to="#[sessionVars.email]" from="ananasfidalgo@gmail.com" subject="Changes in our website" responseTimeout="10000" doc:name="Send email"/>
+            <db:update config-ref="MySQL_Configuration" doc:name="Update number fo sent emails in Database">
+                <db:parameterized-query><![CDATA[UPDATE statistics SET num_sent_email = num_sent_email + 1 where id = 0;]]></db:parameterized-query>
+            </db:update>
+            <db:update config-ref="MySQL_Configuration" doc:name="Update number fo sent emailsper day in Database">
+                <db:parameterized-query><![CDATA[UPDATE statistics SET num_sent_emails_dia = num_sent_emails_dia + 1 where id = 0;]]></db:parameterized-query>
+            </db:update>
+        </foreach>
+        <flow-ref name="twitter" doc:name="twitter"/>
+        <db:update config-ref="MySQL_Configuration" doc:name="Update numero emails dia 0">
+            <db:parameterized-query><![CDATA[UPDATE statistics SET num_sent_emails_dia = 0 where id = 0;]]></db:parameterized-query>
+        </db:update>
+    </sub-flow>
+    <sub-flow name="twitter">
+        <db:select config-ref="MySQL_Configuration" doc:name="Database">
+            <db:parameterized-query><![CDATA[select * from statistics]]></db:parameterized-query>
+        </db:select>
+
+        <set-payload value="#[payload.toString()]" doc:name="Set Payload"/>
+        <component doc:name="Java">
+            <singleton-object class="TwitterApp"/>
+        </component>
+    </sub-flow>
+
+</mule>
